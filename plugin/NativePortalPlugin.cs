@@ -37,7 +37,36 @@ namespace NativePortal
             }
             catch (Exception ex) { Logger.Error("[NativePortal] FileDialog hook error: " + ex.Message); }
 
-            // Hook Popup to fix floating/lagging/overflowing tool popups
+            // SubToolPanel / PinnableWindow hooks: Anchor subtools properly to toolbar and prevent desktop floating
+            try
+            {
+                var subToolType = AccessTools.TypeByName("Serif.Affinity.UI.Controls.Tools.SubToolPanel");
+                if (subToolType != null)
+                {
+                    var setPos = AccessTools.Method(subToolType, "SetPosition", new Type[] { typeof(FrameworkElement) });
+                    if (setPos != null)
+                    {
+                        var prefix = typeof(NativePortalPlugin).GetMethod("SubToolPanel_SetPosition_Prefix", BindingFlags.Static | BindingFlags.Public);
+                        harmony.Patch(setPos, prefix: new HarmonyMethod(prefix));
+                        Logger.Info("[NativePortal] Hooked SubToolPanel.SetPosition!");
+                    }
+                }
+
+                var pinWinType = AccessTools.TypeByName("Serif.Affinity.UI.Pinning.PinnableWindow");
+                if (pinWinType != null)
+                {
+                    var restorePos = AccessTools.Method(pinWinType, "RestoreLastPosition");
+                    if (restorePos != null)
+                    {
+                        var prefix = typeof(NativePortalPlugin).GetMethod("PinnableWindow_RestoreLastPosition_Prefix", BindingFlags.Static | BindingFlags.Public);
+                        harmony.Patch(restorePos, prefix: new HarmonyMethod(prefix));
+                        Logger.Info("[NativePortal] Hooked PinnableWindow.RestoreLastPosition!");
+                    }
+                }
+            }
+            catch (Exception ex) { Logger.Error("[NativePortal] SubToolPanel hooks error: " + ex.Message); }
+
+            // Hook Popup for tracking and clean dismissal
             try
             {
                 var onOpened = typeof(Popup).GetMethod("OnOpened", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -55,16 +84,60 @@ namespace NativePortal
                     harmony.Patch(onClosed, postfix: new HarmonyMethod(postfix));
                     Logger.Info("[NativePortal] Hooked Popup.OnClosed!");
                 }
-
-                var reposition = typeof(Popup).GetMethod("Reposition", BindingFlags.NonPublic | BindingFlags.Instance);
-                if (reposition != null)
-                {
-                    var prefix = typeof(NativePortalPlugin).GetMethod("Popup_Reposition_Prefix", BindingFlags.Static | BindingFlags.Public);
-                    harmony.Patch(reposition, prefix: new HarmonyMethod(prefix));
-                    Logger.Info("[NativePortal] Hooked Popup.Reposition!");
-                }
             }
             catch (Exception ex) { Logger.Error("[NativePortal] Popup hooks error: " + ex.Message); }
+        }
+
+        public static bool SubToolPanel_SetPosition_Prefix(object __instance, FrameworkElement host)
+        {
+            if (__instance == null || host == null) return true;
+            try
+            {
+                var win = __instance as Window;
+                if (win == null || !host.IsVisible) return true;
+
+                // host is the ToolHost or ToolTrayButton on the left toolbar.
+                // Calculate device screen coordinates right next to the button.
+                Point screenPt = host.PointToScreen(new Point(host.ActualWidth + 2, 0));
+
+                if (screenPt.X >= 0 && screenPt.Y >= 0)
+                {
+                    var dpiType = AccessTools.TypeByName("Serif.Windows.UI.Win32Dpi");
+                    if (dpiType != null)
+                    {
+                        var setDevicePos = AccessTools.Method(dpiType, "SetDevicePosition", new Type[] { typeof(Window), typeof(double), typeof(double), typeof(double), typeof(double), typeof(int) });
+                        if (setDevicePos != null)
+                        {
+                            setDevicePos.Invoke(null, new object[] { win, screenPt.X, screenPt.Y, 0.0, 0.0, 0 });
+                            return false; // Handled! Do not fall back to stale WindowSettings.ApplyTo!
+                        }
+                    }
+
+                    var source = PresentationSource.FromVisual(win);
+                    if (source != null && source.CompositionTarget != null)
+                    {
+                        Point logicalPt = source.CompositionTarget.TransformFromDevice.Transform(screenPt);
+                        win.Left = logicalPt.X;
+                        win.Top = logicalPt.Y;
+                        return false;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("[NativePortal] SubToolPanel_SetPosition_Prefix error: " + ex.Message);
+            }
+            return true;
+        }
+
+        public static bool PinnableWindow_RestoreLastPosition_Prefix(object __instance)
+        {
+            if (__instance != null && __instance.GetType().Name == "SubToolPanel")
+            {
+                // Prevent restoring stale/bad coordinates from Window.xml on startup
+                return false;
+            }
+            return true;
         }
 
         public static void Popup_OnOpened_Postfix(Popup __instance)
@@ -72,12 +145,6 @@ namespace NativePortal
             if (__instance == null) return;
             try
             {
-                // Ensure popup opens to the Right (inside canvas) rather than flipping to Left outside window
-                if (__instance.Placement == PlacementMode.Left)
-                {
-                    __instance.Placement = PlacementMode.Right;
-                }
-
                 lock (_openPopups)
                 {
                     _openPopups.Add(new WeakReference(__instance));
@@ -102,17 +169,6 @@ namespace NativePortal
             catch { }
         }
 
-        public static bool Popup_Reposition_Prefix(Popup __instance)
-        {
-            // When parent window moves, dismiss open flyouts instead of lagging/floating behind
-            if (__instance != null && __instance.IsOpen)
-            {
-                __instance.IsOpen = false;
-                return false;
-            }
-            return true;
-        }
-
         public static void CloseAllPopups()
         {
             try
@@ -128,6 +184,28 @@ namespace NativePortal
                         }
                     }
                     _openPopups.Clear();
+                }
+            }
+            catch { }
+        }
+
+        public static void RepositionFloatingPanels()
+        {
+            try
+            {
+                var pinMgrType = AccessTools.TypeByName("Serif.Affinity.UI.Pinning.PinningManager");
+                if (pinMgrType != null)
+                {
+                    var prop = AccessTools.Property(pinMgrType, "Instance");
+                    var inst = prop != null ? prop.GetValue(null, null) : null;
+                    if (inst != null)
+                    {
+                        var updateMethod = AccessTools.Method(pinMgrType, "UpdatePositions");
+                        if (updateMethod != null)
+                        {
+                            updateMethod.Invoke(inst, null);
+                        }
+                    }
                 }
             }
             catch { }
@@ -166,14 +244,17 @@ namespace NativePortal
             if (Application.Current == null || Application.Current.MainWindow == null) return;
             var win = Application.Current.MainWindow;
 
-            win.LocationChanged += (s, e) => CloseAllPopups();
-            win.SizeChanged += (s, e) => CloseAllPopups();
-            win.Deactivated += (s, e) => CloseAllPopups();
-            win.PreviewMouseDown += (s, e) => {
-                // Clicking main window dismisses open popups
+            win.LocationChanged += (s, e) => {
+                RepositionFloatingPanels();
                 CloseAllPopups();
             };
-            Logger.Info("[NativePortal] Attached popup dismissal listeners to MainWindow.");
+            win.SizeChanged += (s, e) => {
+                RepositionFloatingPanels();
+                CloseAllPopups();
+            };
+            win.Deactivated += (s, e) => CloseAllPopups();
+            win.PreviewMouseDown += (s, e) => CloseAllPopups();
+            Logger.Info("[NativePortal] Attached popup dismissal & panel reposition listeners to MainWindow.");
         }
 
         private static List<string> ReadAndClearQueue()

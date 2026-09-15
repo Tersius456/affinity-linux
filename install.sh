@@ -206,6 +206,31 @@ fi
 ln -sfn "${WINEPREFIX}/drive_c/users/${USER}/AppData/Roaming/Affinity/Affinity/3.0/autosave" "$HOME/.local/share/affinity-autosave" 2>/dev/null || true
 ln -sfn "${WINEPREFIX}/drive_c/users/${USER}/AppData/Roaming/Affinity/Affinity/3.0/backup" "$HOME/.local/share/affinity-backups" 2>/dev/null || true
 
+# Affinity Alt Araç Çubuğu ve Uçuşan Panel Sabitleme Ayarları
+AFFINITY_SETTINGS="${WINEPREFIX}/drive_c/users/${USER}/AppData/Roaming/Affinity/Affinity/3.0/Settings"
+if [ -d "$AFFINITY_SETTINGS" ]; then
+    if [ -f "$AFFINITY_SETTINGS/Tools.xml" ]; then
+        sed -i 's|<IsSubToolShowing>True</IsSubToolShowing>|<IsSubToolShowing>False</IsSubToolShowing>|g' "$AFFINITY_SETTINGS/Tools.xml" 2>/dev/null || true
+    fi
+    if [ -f "$AFFINITY_SETTINGS/Window.xml" ]; then
+        python3 -c "
+import xml.etree.ElementTree as ET
+path = '$AFFINITY_SETTINGS/Window.xml'
+try:
+    tree = ET.parse(path)
+    root = tree.getroot()
+    for win in root.findall('.//SubToolPanel'):
+        p = root.find('.//Windows')
+        if p is not None:
+            p.remove(win)
+            tree.write(path, encoding='utf-8', xml_declaration=True)
+except:
+    pass
+" 2>/dev/null || true
+    fi
+    log_info "Affinity araç paneli kararlılık ayarları uygulandı."
+fi
+
 # ------------------------------------------------------------------------------
 # 8. Eklenti Derleme ve Yükleme (NativePortalPlugin)
 # ------------------------------------------------------------------------------
