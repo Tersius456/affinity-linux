@@ -157,14 +157,33 @@ if [ -f "$HOME/.local/share/icc/edid-a24ecdb5d562f1711194a4a5ba9e69e8.icc" ]; th
     ln -sf "$HOME/.local/share/icc/edid-a24ecdb5d562f1711194a4a5ba9e69e8.icc" "$COLOR_DIR/Monitor_EDID.icc" 2>/dev/null || true
 fi
 
-# DXVK konfigürasyonu
+# DXVK konfigürasyonu (Anti-Flicker & Sıfır Gecikme)
 if [ -d "${AFFINITY_DIR}" ]; then
     cat << 'DXVK_EOF' > "${AFFINITY_DIR}/dxvk.conf"
+# DXVK Optimizations for Affinity on Linux
 d3d9.deferSurfaceCreation = True
+d3d9.shaderModel = 1
+d3d9.maxFrameLatency = 1
 d3d9.presentInterval = 1
+dxgi.syncInterval = 1
 d3d9.samplerAnisotropy = 16
+dxvk.enableGraphicsPipelineLibrary = True
+dxvk.numCompilerThreads = 16
 DXVK_EOF
-    log_info "DXVK profil dosyası (dxvk.conf) güncellendi."
+    log_info "DXVK profil dosyası (dxvk.conf) tam optimizasyonla güncellendi."
+fi
+
+# Wine Koyu Tema Renkleri (Beyaz Başlık ve Yanıp Sönmeleri Engelleme)
+wine reg add "HKCU\Control Panel\Colors" /v "Window" /t REG_SZ /d "40 44 48" /f >/dev/null 2>&1 || true
+wine reg add "HKCU\Control Panel\Colors" /v "MenuBar" /t REG_SZ /d "35 38 41" /f >/dev/null 2>&1 || true
+wine reg add "HKCU\Control Panel\Colors" /v "ActiveTitle" /t REG_SZ /d "35 38 41" /f >/dev/null 2>&1 || true
+wine reg add "HKCU\Control Panel\Colors" /v "InactiveTitle" /t REG_SZ /d "40 44 48" /f >/dev/null 2>&1 || true
+
+# KDE Plasma KWin Optimizasyonları (Boyutlandırma Gecikmesini ve Titremeyi Önleme)
+if command -v kwriteconfig6 >/dev/null 2>&1; then
+    kwriteconfig6 --file kwinrc --group "Plugins" --key "kwin4_effect_geometry_changeExcludedWindowClasses" "krunner,yakuake,affinity.exe,Affinity.real.exe,wine" 2>/dev/null || true
+    qdbus6 org.kde.KWin /KWin reconfigure 2>/dev/null || true
+    log_info "KDE KWin pencere optimizasyonları uygulandı."
 fi
 
 # Otomatik kurtarma bağları
