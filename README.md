@@ -54,7 +54,7 @@ affinity-linux/
 To install or deploy this suite on any Linux machine:
 
 ```bash
-git clone https://github.com/<your-username>/affinity-linux.git
+git clone https://github.com/Tersius456/affinity-linux.git
 cd affinity-linux
 chmod +x install.sh
 ./install.sh
