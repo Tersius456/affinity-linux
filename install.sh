@@ -126,6 +126,16 @@ if [ -f "${BASE_DIR}/desktop/affinity.desktop" ]; then
     cp -f "${BASE_DIR}/desktop/affinity.desktop" "$LOCAL_APPS/affinity.desktop"
 fi
 
+# Masaüstüne doğrudan kısayol bırak (Masaüstü veya Desktop)
+DESKTOP_DIR="$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Masaüstü")"
+if [ -d "$DESKTOP_DIR" ] && [ -f "${BASE_DIR}/desktop/affinity.desktop" ]; then
+    cp -f "${BASE_DIR}/desktop/affinity.desktop" "$DESKTOP_DIR/affinity.desktop"
+    chmod +x "$DESKTOP_DIR/affinity.desktop"
+fi
+
+# GUI oturumuna ~/.local/bin yolunu ekle
+systemctl --user set-environment PATH="$HOME/.local/bin:$PATH" 2>/dev/null || true
+
 update-desktop-database "$LOCAL_APPS" 2>/dev/null || true
 command -v kbuildsycoca6 >/dev/null 2>&1 && kbuildsycoca6 2>/dev/null || true
 

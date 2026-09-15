@@ -5,7 +5,7 @@ GenericName=Graphics Editor
 GenericName[tr]=Grafik Editörü
 Comment=Professional photo, vector and layout editing
 Comment[tr]=Profesyonel fotoğraf, vektör ve mizanpaj düzenleme
-Exec=affinity %F
+Exec=sh -c 'PATH="$HOME/.local/bin:$PATH" exec affinity "$@"' -- %F
 Icon=affinity
 Terminal=false
 Type=Application
@@ -23,13 +23,13 @@ Actions=OpenFile;NewInstance;OpenAutosave;
 Name=Belge Aç...
 Name[en]=Open Document...
 Icon=document-open
-Exec=affinity --choose
+Exec=sh -c 'PATH="$HOME/.local/bin:$PATH" exec affinity --choose'
 
 [Desktop Action NewInstance]
 Name=Yeni Belge / Boş Başlat
 Name[en]=New Document / Start Empty
 Icon=document-new
-Exec=affinity
+Exec=sh -c 'PATH="$HOME/.local/bin:$PATH" exec affinity'
 
 [Desktop Action OpenAutosave]
 Name=Kurtarma & Otomatik Kayıt Klasörü
