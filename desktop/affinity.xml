@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+
+  <!-- Affinity Photo -->
+  <mime-type type="application/x-affinity-photo">
+    <comment>Affinity Photo Document</comment>
+    <comment xml:lang="tr">Affinity Photo Belgesi</comment>
+    <glob pattern="*.afphoto"/>
+    <magic priority="80">
+      <match type="string" value="AfPhoto" offset="0"/>
+    </magic>
+  </mime-type>
+
+  <!-- Affinity Designer -->
+  <mime-type type="application/x-affinity-designer">
+    <comment>Affinity Designer Document</comment>
+    <comment xml:lang="tr">Affinity Designer Belgesi</comment>
+    <glob pattern="*.afdesign"/>
+    <magic priority="80">
+      <match type="string" value="AfDesign" offset="0"/>
+    </magic>
+  </mime-type>
+
+  <!-- Affinity Publisher -->
+  <mime-type type="application/x-affinity-publisher">
+    <comment>Affinity Publisher Document</comment>
+    <comment xml:lang="tr">Affinity Publisher Belgesi</comment>
+    <glob pattern="*.afpub"/>
+    <magic priority="80">
+      <match type="string" value="AfPub" offset="0"/>
+    </magic>
+  </mime-type>
+
+  <!-- Affinity Template -->
+  <mime-type type="application/x-affinity-template">
+    <comment>Affinity Template</comment>
+    <comment xml:lang="tr">Affinity Şablonu</comment>
+    <glob pattern="*.aftemplate"/>
+  </mime-type>
+
+</mime-info>

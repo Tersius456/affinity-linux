@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Service
+Name=Affinity Document Thumbnailer
+X-KDE-ServiceTypes=ThumbCreator
+MimeType=application/x-affinity-photo;application/x-affinity-designer;application/x-affinity-publisher;application/x-affinity-template;
+Exec=affinity_thumbnailer.py %i %o %s
+X-KDE-Priority=10

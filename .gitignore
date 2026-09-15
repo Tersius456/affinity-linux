@@ -1,0 +1,19 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs & temp
+*.log
+*.tmp
+.last_font
+
+# Wine prefix directories & registry files
+drive_c/
+dosdevices/
+*.reg
+
+# OS & desktop files
+.directory
+.DS_Store
+Thumbs.db

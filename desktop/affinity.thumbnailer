@@ -1,0 +1,4 @@
+[Thumbnailer Entry]
+TryExec=affinity_thumbnailer.py
+Exec=affinity_thumbnailer.py %i %o %s
+MimeType=application/x-affinity-photo;application/x-affinity-designer;application/x-affinity-publisher;application/x-affinity-template;

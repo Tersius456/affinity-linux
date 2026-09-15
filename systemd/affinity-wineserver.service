@@ -1,0 +1,19 @@
+[Unit]
+Description=Affinity Wineserver (Wine prefix keepalive)
+After=graphical-session.target
+
+[Service]
+Type=simple
+Environment=WINEPREFIX=%h/.affinity
+Environment=WINEDLLOVERRIDES=opencl=
+Environment=WINE_NTSYNC=1
+Environment=WINENTSYNC=1
+Environment=WINEFSYNC=1
+Environment=WINEESYNC=1
+# -p60 = 60 saniye boşta bekleyip sonra kapat (Affinity kapanınca bile 60sn sıcak kalır)
+ExecStart=/usr/bin/wineserver -f -p60
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

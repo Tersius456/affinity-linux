@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=org.serif.Affinity
+Exec=/usr/bin/env affinity
+SystemdService=affinity-ipc.service

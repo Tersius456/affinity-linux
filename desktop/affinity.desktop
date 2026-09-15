@@ -1,0 +1,38 @@
+[Desktop Entry]
+Name=Affinity
+Name[tr]=Affinity
+GenericName=Graphics Editor
+GenericName[tr]=Grafik Editörü
+Comment=Professional photo, vector and layout editing
+Comment[tr]=Profesyonel fotoğraf, vektör ve mizanpaj düzenleme
+Exec=affinity %F
+Icon=affinity
+Terminal=false
+Type=Application
+Categories=Graphics;2DGraphics;RasterGraphics;VectorGraphics;Publishing;
+StartupWMClass=affinity.exe
+StartupNotify=true
+
+# Desteklenen formatlar
+MimeType=application/x-affinity-photo;application/x-affinity-designer;application/x-affinity-publisher;application/x-affinity-template;image/png;image/jpeg;image/webp;image/tiff;image/gif;image/bmp;image/x-bmp;image/x-png;image/svg+xml;image/vnd.adobe.photoshop;image/x-adobe-dng;image/avif;image/heic;image/heif;image/jp2;image/jpx;application/pdf;
+
+# Hızlı Eylemler (Tüm Masaüstü Ortamları: KDE, GNOME, XFCE vb.)
+Actions=OpenFile;NewInstance;OpenAutosave;
+
+[Desktop Action OpenFile]
+Name=Belge Aç...
+Name[en]=Open Document...
+Icon=document-open
+Exec=affinity --choose
+
+[Desktop Action NewInstance]
+Name=Yeni Belge / Boş Başlat
+Name[en]=New Document / Start Empty
+Icon=document-new
+Exec=affinity
+
+[Desktop Action OpenAutosave]
+Name=Kurtarma & Otomatik Kayıt Klasörü
+Name[en]=Autosave & Recovery Folder
+Icon=folder-saved-search
+Exec=xdg-open .local/share/affinity-autosave
