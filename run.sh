@@ -6,7 +6,7 @@
 # ==============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export WINEPREFIX="${WINEPREFIX:-$HOME/.affinity}"
+if [ -z "$WINEPREFIX" ]; then if [ -d "$HOME/.affinity/drive_c" ]; then export WINEPREFIX="$HOME/.affinity"; elif [ -d "$HOME/.local/share/affinity-v3/drive_c" ]; then export WINEPREFIX="$HOME/.local/share/affinity-v3"; else export WINEPREFIX="$HOME/.affinity"; fi; fi
 export WINEDLLOVERRIDES="opencl="
 export WINEDEBUG="-all"
 

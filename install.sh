@@ -30,7 +30,7 @@ log_err()  { echo -e "${COLOR_RED}[✗]${COLOR_RESET} $1"; }
 banner
 
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export WINEPREFIX="${WINEPREFIX:-$HOME/.affinity}"
+if [ -z "$WINEPREFIX" ]; then if [ -d "$HOME/.affinity/drive_c" ]; then export WINEPREFIX="$HOME/.affinity"; elif [ -d "$HOME/.local/share/affinity-v3/drive_c" ]; then export WINEPREFIX="$HOME/.local/share/affinity-v3"; else export WINEPREFIX="$HOME/.affinity"; fi; fi
 AFFINITY_DIR="${WINEPREFIX}/drive_c/Program Files/Affinity/Affinity"
 APL_PLUGINS="${AFFINITY_DIR}/apl/plugins"
 LOCAL_BIN="$HOME/.local/bin"
