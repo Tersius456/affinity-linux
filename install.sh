@@ -137,6 +137,12 @@ fi
 systemctl --user set-environment PATH="$HOME/.local/bin:$PATH" 2>/dev/null || true
 
 update-desktop-database "$LOCAL_APPS" 2>/dev/null || true
+# KDE Menü Düzenleyicisi (kmenuedit) engelini kaldır
+if [ -f "$HOME/.config/menus/applications-kmenuedit.menu" ]; then
+    sed -i '/<Exclude>/,/<\/Exclude>/{/<Filename>affinity.desktop<\/Filename>/d}' "$HOME/.config/menus/applications-kmenuedit.menu" 2>/dev/null || true
+    sed -i '/<Name>\.hidden<\/Name>/,/<Include>/{/<Filename>affinity.desktop<\/Filename>/d}' "$HOME/.config/menus/applications-kmenuedit.menu" 2>/dev/null || true
+fi
+
 command -v kbuildsycoca6 >/dev/null 2>&1 && kbuildsycoca6 2>/dev/null || true
 
 # ------------------------------------------------------------------------------
