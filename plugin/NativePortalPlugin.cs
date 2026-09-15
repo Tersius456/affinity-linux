@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Threading;
 using System.Collections.Generic;
 using System.Windows;
+using System.Windows.Controls.Primitives;
 using System.Windows.Threading;
 using HarmonyLib;
 using Microsoft.Win32;
@@ -19,6 +20,7 @@ namespace NativePortal
         private static bool _initialized = false;
         private static bool _queueWatcherStarted = false;
         private static string QUEUE_FILE = @"Z:\tmp\affinity_open_queue.txt";
+        private static readonly List<WeakReference> _openPopups = new List<WeakReference>();
 
         public override void OnPatch(Harmony harmony, IPluginContext context)
         {
@@ -34,6 +36,101 @@ namespace NativePortal
                 }
             }
             catch (Exception ex) { Logger.Error("[NativePortal] FileDialog hook error: " + ex.Message); }
+
+            // Hook Popup to fix floating/lagging/overflowing tool popups
+            try
+            {
+                var onOpened = typeof(Popup).GetMethod("OnOpened", BindingFlags.NonPublic | BindingFlags.Instance);
+                if (onOpened != null)
+                {
+                    var postfix = typeof(NativePortalPlugin).GetMethod("Popup_OnOpened_Postfix", BindingFlags.Static | BindingFlags.Public);
+                    harmony.Patch(onOpened, postfix: new HarmonyMethod(postfix));
+                    Logger.Info("[NativePortal] Hooked Popup.OnOpened!");
+                }
+
+                var onClosed = typeof(Popup).GetMethod("OnClosed", BindingFlags.NonPublic | BindingFlags.Instance);
+                if (onClosed != null)
+                {
+                    var postfix = typeof(NativePortalPlugin).GetMethod("Popup_OnClosed_Postfix", BindingFlags.Static | BindingFlags.Public);
+                    harmony.Patch(onClosed, postfix: new HarmonyMethod(postfix));
+                    Logger.Info("[NativePortal] Hooked Popup.OnClosed!");
+                }
+
+                var reposition = typeof(Popup).GetMethod("Reposition", BindingFlags.NonPublic | BindingFlags.Instance);
+                if (reposition != null)
+                {
+                    var prefix = typeof(NativePortalPlugin).GetMethod("Popup_Reposition_Prefix", BindingFlags.Static | BindingFlags.Public);
+                    harmony.Patch(reposition, prefix: new HarmonyMethod(prefix));
+                    Logger.Info("[NativePortal] Hooked Popup.Reposition!");
+                }
+            }
+            catch (Exception ex) { Logger.Error("[NativePortal] Popup hooks error: " + ex.Message); }
+        }
+
+        public static void Popup_OnOpened_Postfix(Popup __instance)
+        {
+            if (__instance == null) return;
+            try
+            {
+                // Ensure popup opens to the Right (inside canvas) rather than flipping to Left outside window
+                if (__instance.Placement == PlacementMode.Left)
+                {
+                    __instance.Placement = PlacementMode.Right;
+                }
+
+                lock (_openPopups)
+                {
+                    _openPopups.Add(new WeakReference(__instance));
+                }
+            }
+            catch { }
+        }
+
+        public static void Popup_OnClosed_Postfix(Popup __instance)
+        {
+            if (__instance == null) return;
+            try
+            {
+                lock (_openPopups)
+                {
+                    _openPopups.RemoveAll(wr => {
+                        var target = wr.Target as Popup;
+                        return target == null || target == __instance;
+                    });
+                }
+            }
+            catch { }
+        }
+
+        public static bool Popup_Reposition_Prefix(Popup __instance)
+        {
+            // When parent window moves, dismiss open flyouts instead of lagging/floating behind
+            if (__instance != null && __instance.IsOpen)
+            {
+                __instance.IsOpen = false;
+                return false;
+            }
+            return true;
+        }
+
+        public static void CloseAllPopups()
+        {
+            try
+            {
+                lock (_openPopups)
+                {
+                    foreach (var wr in _openPopups.ToArray())
+                    {
+                        var p = wr.Target as Popup;
+                        if (p != null && p.IsOpen)
+                        {
+                            p.IsOpen = false;
+                        }
+                    }
+                    _openPopups.Clear();
+                }
+            }
+            catch { }
         }
 
         public override void OnUiReady(IPluginContext context)
@@ -53,11 +150,30 @@ namespace NativePortal
             if (_initialized) return;
             _initialized = true;
             StartQueueWatcher();
+
             var disp = Application.Current != null ? Application.Current.Dispatcher : Dispatcher.CurrentDispatcher;
             disp.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() => {
-                try { OpenFromQueueAndArgs(); }
-                catch (Exception ex) { Logger.Error("[NativePortal] Init open error: " + ex); }
+                try {
+                    AttachWindowListeners();
+                    OpenFromQueueAndArgs();
+                }
+                catch (Exception ex) { Logger.Error("[NativePortal] Init error: " + ex); }
             }));
+        }
+
+        private static void AttachWindowListeners()
+        {
+            if (Application.Current == null || Application.Current.MainWindow == null) return;
+            var win = Application.Current.MainWindow;
+
+            win.LocationChanged += (s, e) => CloseAllPopups();
+            win.SizeChanged += (s, e) => CloseAllPopups();
+            win.Deactivated += (s, e) => CloseAllPopups();
+            win.PreviewMouseDown += (s, e) => {
+                // Clicking main window dismisses open popups
+                CloseAllPopups();
+            };
+            Logger.Info("[NativePortal] Attached popup dismissal listeners to MainWindow.");
         }
 
         private static List<string> ReadAndClearQueue()
@@ -73,12 +189,7 @@ namespace NativePortal
                 {
                     string p = line.Trim().Trim('"', '\'');
                     if (string.IsNullOrEmpty(p) || paths.Contains(p)) continue;
-                    // Dosya gerçekten var mı kontrol et — sahte/eski kayıtları atla
-                    if (!File.Exists(p))
-                    {
-                        Logger.Info("[NativePortal] Dosya bulunamadı, atlandı: " + p);
-                        continue;
-                    }
+                    if (!File.Exists(p)) continue;
                     paths.Add(p);
                 }
             }
@@ -89,13 +200,11 @@ namespace NativePortal
         private static void OpenFromQueueAndArgs()
         {
             List<string> paths = ReadAndClearQueue();
-
             string[] args = Environment.GetCommandLineArgs();
             for (int i = 1; i < args.Length; i++)
             {
                 string p = args[i].Trim('"', '\'');
                 if (string.IsNullOrEmpty(p) || paths.Contains(p)) continue;
-                // Sadece gerçekten var olan dosyaları aç (flag'ler ve sahte yollar atlanır)
                 if (File.Exists(p)) paths.Add(p);
             }
 
@@ -104,10 +213,6 @@ namespace NativePortal
                 Logger.Info("[NativePortal] Startup opening " + paths.Count + " files: " + string.Join(", ", paths.ToArray()));
                 CallOpenFiles(paths);
             }
-            else
-            {
-                Logger.Info("[NativePortal] No startup files.");
-            }
         }
 
         private static void StartQueueWatcher()
@@ -115,53 +220,36 @@ namespace NativePortal
             if (_queueWatcherStarted) return;
             _queueWatcherStarted = true;
             var t = new Thread(() => {
-                Logger.Info("[NativePortal] Queue watcher thread running. Watching: " + QUEUE_FILE);
-                int tick = 0;
                 while (true)
                 {
                     try
                     {
-                        bool exists = File.Exists(QUEUE_FILE);
-                        if (tick % 50 == 0) // log every 5s
-                            Logger.Info("[NativePortal] QW tick=" + tick + " exists=" + exists);
-                        tick++;
-
-                        if (exists && Application.Current != null)
+                        if (File.Exists(QUEUE_FILE) && Application.Current != null)
                         {
                             List<string> paths = ReadAndClearQueue();
                             if (paths.Count > 0)
                             {
                                 List<string> cap = paths;
                                 Application.Current.Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() => {
-                                    Logger.Info("[NativePortal] Queue: opening " + string.Join(", ", cap.ToArray()));
                                     CallOpenFiles(cap);
                                 }));
                             }
                         }
                     }
-                    catch (Exception ex)
-                    {
-                        Logger.Error("[NativePortal] QW error: " + ex.Message);
-                    }
+                    catch { }
                     Thread.Sleep(100);
                 }
             });
             t.IsBackground = true;
             t.Name = "NativePortalQueueWatcher";
             t.Start();
-            Logger.Info("[NativePortal] Queue watcher started.");
         }
 
         private static void CallOpenFiles(List<string> paths)
         {
             object app = Application.Current;
-            if (app == null) { Logger.Error("[NativePortal] Application.Current is null!"); return; }
-
-            Type appType = app.GetType();
-            Logger.Info("[NativePortal] App type: " + appType.FullName);
-
-            // Walk hierarchy to find ProcessCommandLineArguments(IEnumerable<string>)
-            Type cursor = appType;
+            if (app == null) return;
+            Type cursor = app.GetType();
             while (cursor != null && cursor != typeof(object))
             {
                 foreach (MethodInfo m in cursor.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
@@ -171,42 +259,12 @@ namespace NativePortal
                         var ps = m.GetParameters();
                         if (ps.Length == 1 && ps[0].ParameterType != typeof(string[]))
                         {
-                            Logger.Info("[NativePortal] Found ProcessCommandLineArguments(IEnumerable) on: " + cursor.FullName);
-                            try
-                            {
-                                m.Invoke(app, new object[] { paths });
-                                Logger.Info("[NativePortal] ProcessCommandLineArguments SUCCESS!");
-                                return;
-                            }
-                            catch (Exception ex) { Logger.Error("[NativePortal] ProcessCommandLineArguments failed: " + ex); }
+                            try { m.Invoke(app, new object[] { paths }); return; } catch { }
                         }
                     }
                 }
                 cursor = cursor.BaseType;
             }
-
-            // Fallback: LoadFiles (private, but reflection ignores access modifiers)
-            cursor = appType;
-            while (cursor != null && cursor != typeof(object))
-            {
-                foreach (MethodInfo m in cursor.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
-                {
-                    if (m.Name == "LoadFiles" && m.GetParameters().Length == 1)
-                    {
-                        Logger.Info("[NativePortal] Found LoadFiles on: " + cursor.FullName);
-                        try
-                        {
-                            m.Invoke(app, new object[] { paths });
-                            Logger.Info("[NativePortal] LoadFiles SUCCESS!");
-                            return;
-                        }
-                        catch (Exception ex) { Logger.Error("[NativePortal] LoadFiles failed: " + ex); }
-                    }
-                }
-                cursor = cursor.BaseType;
-            }
-
-            Logger.Error("[NativePortal] No suitable open method found on " + appType.FullName + "!");
         }
 
         public static bool RunDialog_Prefix(FileDialog __instance, IntPtr hwndOwner, ref bool __result)
@@ -215,8 +273,6 @@ namespace NativePortal
             {
                 bool isSave = (__instance is SaveFileDialog);
                 string mode = isSave ? "save" : "open";
-                Logger.Info("[NativePortal] File dialog: " + mode);
-
                 string scriptPath = "/home/ters/.affinity/native_file_chooser.sh";
                 string outputFile = @"Z:\tmp\affinity_selected.txt";
                 string doneFile = @"Z:\tmp\affinity_done.txt";
@@ -263,7 +319,6 @@ namespace NativePortal
                             if (!ext.StartsWith(".")) ext = "." + ext;
                             wp += ext;
                         }
-                        Logger.Info("[NativePortal] Selected: " + wp);
                         __instance.FileName = wp;
                         __result = true;
                         return false;
@@ -272,7 +327,7 @@ namespace NativePortal
                 __result = false;
                 return false;
             }
-            catch (Exception ex) { Logger.Error("[NativePortal] RunDialog error: " + ex.Message); return true; }
+            catch { return true; }
         }
     }
 }
